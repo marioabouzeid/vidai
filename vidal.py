@@ -40,7 +40,7 @@ def get_text_google(subject: str, api_key: str) -> str | None:
 def get_audio(text: str, voice: str) -> "np.ndarray":
     from kokoro_onnx import Kokoro
 
-    kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+    kokoro = Kokoro("lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin")
     samples, sample_rate = kokoro.create(text, voice=voice, speed=1.15, lang="en-us")
     return samples, sample_rate
 
@@ -178,30 +178,30 @@ if __name__ == "__main__":
     subject = "Give me 5 tips billionaires use to manage their time."
     title = "hello"
 
-    srt_file = title + ".srt"
-    audio_file = title + ".wav"
-    video_file = title + ".mp4"
+    srt_file = "lib/" + title + ".srt"
+    audio_file = "lib/" + title + ".wav"
+    video_file = "lib/" + title + ".mp4"
 
-    # # Get the text from the subject
-    # logging.critical("Getting text from Google")
-    # text = get_text_google(subject, gemini_api_key)
-    # logging.critical(f"Text: {text}")
+    # Get the text from the subject
+    logging.critical("Getting text from Google")
+    text = get_text_google(subject, gemini_api_key)
+    logging.critical(f"Text: {text}")
 
-    # # Get the audio from the text
-    # logging.critical("Getting audio from the text")
-    # samples, sample_rate = get_audio(text, voice)
-    # save_audio(samples, sample_rate, audio_file)
-    # logging.critical(f"Audio saved to {audio_file}")
+    # Get the audio from the text
+    logging.critical("Getting audio from the text")
+    samples, sample_rate = get_audio(text, voice)
+    save_audio(samples, sample_rate, audio_file)
+    logging.critical(f"Audio saved to {audio_file}")
 
-    # # Generate subtitles
-    # logging.critical("Getting subtitles from the audio")
-    # segments, critical = generate_subtitles(audio_file)
-    # save_subtitles(segments, srt_file)
-    # logging.critical(f"Subtitles saved to {srt_file}")
+    # Generate subtitles
+    logging.critical("Getting subtitles from the audio")
+    segments, critical = generate_subtitles(audio_file)
+    save_subtitles(segments, srt_file)
+    logging.critical(f"Subtitles saved to {srt_file}")
 
-    # # Download the video
-    # logging.critical("Getting video from local file")
-    # process_video(origin_video, len(samples) / sample_rate, video_file)
-    # add_audio(video_file, audio_file)
+    # Download the video
+    logging.critical("Getting video from local file")
+    process_video(origin_video, len(samples) / sample_rate, video_file)
+    add_audio(video_file, audio_file)
     add_subtitles(video_file, srt_file)
     logging.critical(f"Video saved to {video_file}")
