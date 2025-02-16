@@ -171,6 +171,9 @@ cython_debug/
 .pypirc
 
 # Models and voices cache
-kokoro-v1.0.onnx
-voices-v1.0.bin
+*.onnx
+*.bin
 .DS_Store
+*.srt
+*.mp4
+*.wav
