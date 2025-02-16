@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Models and voices cache
+kokoro-v1.0.onnx
+voices-v1.0.bin
+.DS_Store
