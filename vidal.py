@@ -37,8 +37,8 @@ def get_text_google(subject: str, api_key: str) -> str | None:
     subject += """
                 A man will be reading your answer directly so don't write 
                 as if you are replying to me, just the answer directly.
-                Add some hooks to make it more engaging, like 'Don't miss #3'.
-                Limit to 1.2 minute of talking time at most.
+                Add a supe enganging hook at the beginning, make up something random.
+                Limit to 30 seconds of talking time at most (around 80 words).
                 Do not include the word count in your reply.
             """
 
@@ -47,7 +47,8 @@ def get_text_google(subject: str, api_key: str) -> str | None:
         contents=subject,
     )
 
-    logging.critical("Text is generated using Gemini AI")
+    words = response.text.split()
+    logging.critical(f"Text is generated using Gemini AI, {len(words)} words")
 
     return (
         response.text.replace("*", "")
@@ -56,7 +57,7 @@ def get_text_google(subject: str, api_key: str) -> str | None:
 
 
 def get_audio(text: str, voice: str, onnx: str, bin: str) -> "np.ndarray":
-    logging.critical("Getting audio from the text")
+    logging.critical("Generating voiceover from the text using Kokoro ONNX")
 
     from kokoro_onnx import Kokoro
 
@@ -128,7 +129,7 @@ def cut_video_snippet(source: str, length: int, output: str):
     duration_cmd = f'ffprobe -v quiet -print_format json -show_format "{source}"'
     duration_output = subprocess.check_output(duration_cmd, shell=True)
     duration_data = json.loads(duration_output)
-    total_duration = float(duration_data["format"]["duration"])
+    total_duration = float(duration_data["format"]["duration"]) + 3
     max_start = total_duration - length
     start_time = random.uniform(0, max_start)
 
@@ -162,7 +163,6 @@ def add_voice_to_video(input_video: str, voice_file: str) -> None:
         "0:v",
         "-map",
         "1:a",
-        "-shortest",
         temp_output,
     ]
 
@@ -194,7 +194,7 @@ def add_music_to_video(input_video: str, music_dir: str) -> None:
         "-c:v",
         "copy",
         "-c:a",
-        "mp3",
+        "aac",
         "-shortest",
         temp_output,
     ]
@@ -213,8 +213,8 @@ def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
         "-i",
         input_video,
         "-vf",
-        f"subtitles={subtitle_file}:force_style='BorderStyle=1,Outline=0,"
-        + f"Fontsize=18,FontName={font_name},PrimaryColour=&H00FFFFFF,MarginV=135'",
+        f"subtitles={subtitle_file}:force_style='BorderStyle=1,Outline=0,Shadow=1,"
+        + f"Fontsize=18,FontName={font_name},PrimaryColour=&H00FFFFFF,MarginV=125'",
         "-c:a",
         "copy",
         "-y",
@@ -228,15 +228,19 @@ def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
     os.replace(temp_output, input_video)
 
 
-def copy_icloud(video_file: str, folder: str) -> None:
+def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
     import shutil
 
     logging.critical("Copying video to iCloud")
+    new_filename = video_file.split("/")[0:-1] + [f"{new_filename}.mp4"]
+    new_filename = "/".join(new_filename)
+    os.replace(video_file, new_filename)
 
-    shutil.copy(
-        video_file,
+    shutil.move(
+        new_filename,
         expanduser("~") + f"/Library/Mobile Documents/com~apple~CloudDocs/{folder}",
     )
+
     logging.critical("Video copied to iCloud")
 
 
@@ -245,19 +249,20 @@ if __name__ == "__main__":
     voice = "am_michael"
 
     logging.critical(f"Starting VIDAI for: {subject}")
-    srt_file = "out/input.srt"
+    srt_file = "out/input.ass"
     voice_file = "out/input.wav"
     video_file = "out/input.mp4"
+    filename = subject.replace(" ", "_").lower()
 
     text = get_text_google(subject, GEMINI_API_KEY)
     samples, sample_rate = get_audio(text, voice, ONNX, VOICES)
     save_audio(samples, sample_rate, voice_file)
-    segments, critical = generate_subtitles(voice_file)
+    segments, info = generate_subtitles(voice_file)
     save_subtitles(segments, srt_file)
     cut_video_snippet(ORIGIN_VIDEO, len(samples) / sample_rate, video_file)
     add_voice_to_video(video_file, voice_file)
     add_music_to_video(video_file, MUSIC_DIR)
     add_subtitles(video_file, srt_file, FONT_NAME)
-    copy_icloud(video_file, "videos")
+    move_to_icloud(video_file, filename, "videos")
 
     logging.critical(f"Video saved to {video_file}")
