@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+from os.path import expanduser
 from typing import TYPE_CHECKING, Iterable
 
 from dotenv import load_dotenv
@@ -9,13 +10,27 @@ if TYPE_CHECKING:
     import numpy as np
     from faster_whisper.transcribe import Segment, TranscriptionInfo
 
-
 # curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx -o kokoro-v1.0.onnx
 # curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin -o voices-v1.0.bin
 # install poetry, project dependencies and ffmpeg
 
+load_dotenv()
+logging.basicConfig(
+    level=logging.CRITICAL,
+    format="%(asctime)s - %(levelname)s - %(message)s [in %(filename)s:%(lineno)d]",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ONNX, VOICES = "lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin"
+FONT_NAME = "Bebas Neue"
+ORIGIN_VIDEO = "lib/input.mp4"
+MUSIC_DIR = "lib/audio"
+
 
 def get_text_google(subject: str, api_key: str) -> str | None:
+    logging.critical("Getting text from Google")
+
     from google import genai
 
     client = genai.Client(api_key=api_key)
@@ -31,6 +46,9 @@ def get_text_google(subject: str, api_key: str) -> str | None:
         model="gemini-2.0-flash",
         contents=subject,
     )
+
+    logging.critical("Text is generated using Gemini AI")
+
     return (
         response.text.replace("*", "")
         + " Don't forget to like and follow for more daily content!"
@@ -38,6 +56,8 @@ def get_text_google(subject: str, api_key: str) -> str | None:
 
 
 def get_audio(text: str, voice: str, onnx: str, bin: str) -> "np.ndarray":
+    logging.critical("Getting audio from the text")
+
     from kokoro_onnx import Kokoro
 
     kokoro = Kokoro(onnx, bin)
@@ -56,19 +76,16 @@ def save_audio(samples: "np.ndarray", sample_rate: int, filename: str) -> None:
     from scipy.io import wavfile
 
     wavfile.write(filename, sample_rate, samples)
+    logging.critical(f"Audio saved to {filename}")
 
 
 def generate_subtitles(filename: str) -> "tuple[Iterable[Segment], TranscriptionInfo]":
     from faster_whisper import WhisperModel
 
+    logging.critical("Getting subtitles from the audio")
     model = WhisperModel("small", device="cpu", compute_type="int8")
     segments, info = model.transcribe(filename)
     return segments, info
-
-
-def log_subtitles(segments: "Iterable[Segment]") -> None:
-    for segment in segments:
-        print(f"{segment.start:.3f} - {segment.end:.3f}: {segment.text}")
 
 
 def save_subtitles(segments: "Iterable[Segment]", filename: str) -> None:
@@ -86,6 +103,8 @@ def save_subtitles(segments: "Iterable[Segment]", filename: str) -> None:
             srt_file.write(f"{i}\n")
             srt_file.write(f"{format_time(start)} --> {format_time(end)}\n")
             srt_file.write(f"{text.upper()}\n\n")
+
+    logging.critical(f"Subtitles saved to {filename}")
 
 
 def download_video(url: str, resolution: str) -> None:
@@ -105,6 +124,7 @@ def cut_video_snippet(source: str, length: int, output: str):
     import json
     import random
 
+    logging.critical("Getting video from local file")
     duration_cmd = f'ffprobe -v quiet -print_format json -show_format "{source}"'
     duration_output = subprocess.check_output(duration_cmd, shell=True)
     duration_data = json.loads(duration_output)
@@ -128,8 +148,8 @@ def cut_video_snippet(source: str, length: int, output: str):
 
 
 def add_voice_to_video(input_video: str, voice_file: str) -> None:
+    logging.critical("Adding voiceover to the video")
     temp_output = input_video.replace(".mp4", "_temp.mp4")
-
     command = [
         "ffmpeg",
         "-i",
@@ -155,6 +175,7 @@ def add_voice_to_video(input_video: str, voice_file: str) -> None:
 def add_music_to_video(input_video: str, music_dir: str) -> None:
     import random
 
+    logging.critical("Adding music to the video")
     music_file = os.path.join(music_dir, random.choice(os.listdir(music_dir)))
     temp_output = input_video.replace(".mp4", "_temp.mp4")
 
@@ -184,6 +205,7 @@ def add_music_to_video(input_video: str, music_dir: str) -> None:
 
 
 def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
+    logging.critical("Adding subtitles to the video")
     temp_output = input_video.replace(".mp4", "_temp.mp4")
 
     command = [
@@ -206,58 +228,36 @@ def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
     os.replace(temp_output, input_video)
 
 
-if __name__ == "__main__":
-    load_dotenv()
-    logging.basicConfig(
-        level=logging.CRITICAL,
-        format="%(asctime)s - %(levelname)s - %(message)s [in %(filename)s:%(lineno)d]",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+def copy_icloud(video_file: str) -> None:
+    import shutil
 
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    onnx, lib = "lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin"
-    font_name = "Bebas Neue"
-    origin_video = "lib/input.mp4"
-    music_dir = "lib/audio"
+    logging.critical("Copying video to iCloud")
+
+    shutil.copy(
+        video_file,
+        expanduser("~") + "/Library/Mobile Documents/com~apple~CloudDocs/videos",
+    )
+    logging.critical("Video copied to iCloud")
+
+
+if __name__ == "__main__":
+    subject = "Tips for a successful and wealthy life"
     voice = "am_michael"
 
-    subject = "Give me tips on how to stay healthy"
-
-    title = subject.replace(" ", "_").replace("?", "").replace(".", "").lower()
+    logging.critical(f"Starting VIDAI for: {subject}")
     srt_file = "out/input.srt"
     voice_file = "out/input.wav"
     video_file = "out/input.mp4"
 
-    logging.critical(f"Starting VIDAI for: {subject}")
-
-    # Get the text from the subject
-    logging.critical("Getting text from Google")
-    text = get_text_google(subject, gemini_api_key)
-    logging.critical("Text is generated using Gemini AI")
-
-    # Get the audio from the text
-    logging.critical("Getting audio from the text")
-    samples, sample_rate = get_audio(text, voice, onnx, lib)
+    text = get_text_google(subject, GEMINI_API_KEY)
+    samples, sample_rate = get_audio(text, voice, ONNX, VOICES)
     save_audio(samples, sample_rate, voice_file)
-    logging.critical(f"Audio saved to {voice_file}")
-
-    # Generate subtitles
-    logging.critical("Getting subtitles from the audio")
     segments, critical = generate_subtitles(voice_file)
     save_subtitles(segments, srt_file)
-    logging.critical(f"Subtitles saved to {srt_file}")
-
-    # Download the video
-    logging.critical("Getting video from local file")
-    cut_video_snippet(origin_video, len(samples) / sample_rate, video_file)
-
-    # Add voice and music to the video
-    logging.critical("Adding voiceover and music to the video")
+    cut_video_snippet(ORIGIN_VIDEO, len(samples) / sample_rate, video_file)
     add_voice_to_video(video_file, voice_file)
-    add_music_to_video(video_file, music_dir)
-
-    # Add subtitles to the video
-    logging.critical("Adding subtitles to the video")
-    add_subtitles(video_file, srt_file, font_name)
+    add_music_to_video(video_file, MUSIC_DIR)
+    add_subtitles(video_file, srt_file, FONT_NAME)
+    copy_icloud(video_file)
 
     logging.critical(f"Video saved to {video_file}")
