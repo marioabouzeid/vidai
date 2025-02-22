@@ -37,10 +37,10 @@ def get_text_google(subject: str, api_key: str) -> str | None:
     )
 
 
-def get_audio(text: str, voice: str) -> "np.ndarray":
+def get_audio(text: str, voice: str, onnx: str, bin: str) -> "np.ndarray":
     from kokoro_onnx import Kokoro
 
-    kokoro = Kokoro("lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin")
+    kokoro = Kokoro(onnx, bin)
     samples, sample_rate = kokoro.create(text, voice=voice, speed=1.15, lang="en-us")
     return samples, sample_rate
 
@@ -101,7 +101,7 @@ def download_video(url: str, resolution: str) -> None:
     yt.streams[idx].download()
 
 
-def process_video(source: str, length: int, output: str):
+def cut_video_snippet(source: str, length: int, output: str):
     import json
     import random
 
@@ -112,96 +112,152 @@ def process_video(source: str, length: int, output: str):
     max_start = total_duration - length
     start_time = random.uniform(0, max_start)
 
-    ffmpeg_cmd = (
+    command = (
         f'ffmpeg -ss {start_time:.2f} -i "{source}" -t {length} '
         f'-vf "crop=ih*9/16:ih,scale=1080:1920" -c:v h264_videotoolbox '
         f'-c:a aac -b:a 128k -preset faster "{output}" -y'
     )
 
-    subprocess.run(ffmpeg_cmd, shell=True, check=True)
+    subprocess.run(
+        command,
+        check=True,
+        shell=True,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
 
 
-def add_audio(input_video: str, audio_file: str) -> None:
-    temp_output = "temp_" + input_video  # Temporary file to hold the result
+def add_voice_to_video(input_video: str, voice_file: str) -> None:
+    temp_output = input_video.replace(".mp4", "_temp.mp4")
 
     command = [
         "ffmpeg",
         "-i",
-        input_video,  # Input video file
+        input_video,
         "-i",
-        audio_file,  # Input audio file
-        "-c:v",
-        "copy",  # Copy video stream without re-encoding
-        "-c:a",
-        "aac",  # Encode audio to AAC format
+        voice_file,
+        "-c",
+        "copy",
         "-map",
-        "0:v:0",  # Use video from the first input (video file)
+        "0:v",
         "-map",
-        "1:a:0",  # Use audio from the second input (audio file)
-        "-y",  # Overwrite the temporary output file
-        temp_output,  # Temporary output file
+        "1:a",
+        "-shortest",
+        temp_output,
     ]
 
-    subprocess.run(command, check=True)
-
-    # Rename the temporary file to the original file to overwrite it
+    subprocess.run(
+        command, check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    )
     os.replace(temp_output, input_video)
 
 
-def add_subtitles(input_video: str, subtitle_file: str) -> None:
-    temp_output = "temp_" + input_video  # Temporary file to hold the result
+def add_music_to_video(input_video: str, music_dir: str) -> None:
+    import random
+
+    music_file = os.path.join(music_dir, random.choice(os.listdir(music_dir)))
+    temp_output = input_video.replace(".mp4", "_temp.mp4")
 
     command = [
         "ffmpeg",
         "-i",
-        input_video,  # Input video file
-        "-vf",
-        f"subtitles={subtitle_file}:force_style='Fontname=BebasNeue-Regular.ttf,PrimaryColour=&HFFFFFF&,BorderStyle=0,BorderWidth=0,Alignment=2,VerticalAlignment=1,MarginV=100'",  # Subtitles filter with size 90 and margin 100
+        input_video,
+        "-i",
+        music_file,
+        "-filter_complex",
+        "[0:a]volume=1.5[a0]; [1:a]volume=0.05[a1]; [a0][a1]amerge=inputs=2[a]",
+        "-map",
+        "0:v",
+        "-map",
+        "[a]",
+        "-c:v",
+        "copy",
         "-c:a",
-        "copy",  # Copy audio stream without re-encoding
-        "-y",  # Overwrite output file
-        temp_output,  # Temporary output file
+        "mp3",
+        "-shortest",
+        temp_output,
     ]
-    subprocess.run(command, check=True)
+    subprocess.run(
+        command, check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    )
+    os.replace(temp_output, input_video)
+
+
+def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
+    temp_output = input_video.replace(".mp4", "_temp.mp4")
+
+    command = [
+        "ffmpeg",
+        "-i",
+        input_video,
+        "-vf",
+        f"subtitles={subtitle_file}:force_style='BorderStyle=1,Outline=0,"
+        + f"Fontsize=18,FontName={font_name},PrimaryColour=&H00FFFFFF,MarginV=135'",
+        "-c:a",
+        "copy",
+        "-y",
+        temp_output,
+    ]
+
+    subprocess.run(
+        command, check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    )
 
     os.replace(temp_output, input_video)
 
 
 if __name__ == "__main__":
     load_dotenv()
-    logging.basicConfig(level=logging.CRITICAL)
+    logging.basicConfig(
+        level=logging.CRITICAL,
+        format="%(asctime)s - %(levelname)s - %(message)s [in %(filename)s:%(lineno)d]",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-    voice = "am_michael"
     gemini_api_key = os.getenv("GEMINI_API_KEY")
+    onnx, lib = "lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin"
+    font_name = "Bebas Neue"
+    origin_video = "lib/input.mp4"
+    music_dir = "lib/audio"
+    voice = "am_michael"
 
-    origin_video = "input.mp4"
-    subject = "Give me 5 tips billionaires use to manage their time."
-    title = "hello"
+    subject = "Give me tips on how to stay healthy"
 
-    srt_file = "lib/" + title + ".srt"
-    audio_file = "lib/" + title + ".wav"
-    video_file = "lib/" + title + ".mp4"
+    title = subject.replace(" ", "_").replace("?", "").replace(".", "").lower()
+    srt_file = "out/input.srt"
+    voice_file = "out/input.wav"
+    video_file = "out/input.mp4"
+
+    logging.critical(f"Starting VIDAI for: {subject}")
 
     # Get the text from the subject
     logging.critical("Getting text from Google")
     text = get_text_google(subject, gemini_api_key)
-    logging.critical(f"Text: {text}")
+    logging.critical("Text is generated using Gemini AI")
 
     # Get the audio from the text
     logging.critical("Getting audio from the text")
-    samples, sample_rate = get_audio(text, voice)
-    save_audio(samples, sample_rate, audio_file)
-    logging.critical(f"Audio saved to {audio_file}")
+    samples, sample_rate = get_audio(text, voice, onnx, lib)
+    save_audio(samples, sample_rate, voice_file)
+    logging.critical(f"Audio saved to {voice_file}")
 
     # Generate subtitles
     logging.critical("Getting subtitles from the audio")
-    segments, critical = generate_subtitles(audio_file)
+    segments, critical = generate_subtitles(voice_file)
     save_subtitles(segments, srt_file)
     logging.critical(f"Subtitles saved to {srt_file}")
 
     # Download the video
     logging.critical("Getting video from local file")
-    process_video(origin_video, len(samples) / sample_rate, video_file)
-    add_audio(video_file, audio_file)
-    add_subtitles(video_file, srt_file)
+    cut_video_snippet(origin_video, len(samples) / sample_rate, video_file)
+
+    # Add voice and music to the video
+    logging.critical("Adding voiceover and music to the video")
+    add_voice_to_video(video_file, voice_file)
+    add_music_to_video(video_file, music_dir)
+
+    # Add subtitles to the video
+    logging.critical("Adding subtitles to the video")
+    add_subtitles(video_file, srt_file, font_name)
+
     logging.critical(f"Video saved to {video_file}")
