@@ -228,14 +228,14 @@ def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
     os.replace(temp_output, input_video)
 
 
-def copy_icloud(video_file: str) -> None:
+def copy_icloud(video_file: str, folder: str) -> None:
     import shutil
 
     logging.critical("Copying video to iCloud")
 
     shutil.copy(
         video_file,
-        expanduser("~") + "/Library/Mobile Documents/com~apple~CloudDocs/videos",
+        expanduser("~") + f"/Library/Mobile Documents/com~apple~CloudDocs/{folder}",
     )
     logging.critical("Video copied to iCloud")
 
@@ -258,6 +258,6 @@ if __name__ == "__main__":
     add_voice_to_video(video_file, voice_file)
     add_music_to_video(video_file, MUSIC_DIR)
     add_subtitles(video_file, srt_file, FONT_NAME)
-    copy_icloud(video_file)
+    copy_icloud(video_file, "videos")
 
     logging.critical(f"Video saved to {video_file}")
