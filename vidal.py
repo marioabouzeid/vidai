@@ -24,7 +24,7 @@ logging.basicConfig(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ONNX, VOICES = "lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin"
 FONT_NAME = "Bebas Neue"
-ORIGIN_VIDEO = "lib/input.mp4"
+ORIGIN_VIDEO = "lib/video/sport.mp4"
 MUSIC_DIR = "lib/audio"
 
 
@@ -51,7 +51,9 @@ def get_text_google(subject: str, api_key: str) -> str | None:
     logging.critical(f"Text is generated using Gemini AI, {len(words)} words")
 
     return (
-        response.text.replace("*", "")
+        subject
+        + ". "
+        + response.text.replace("*", "")
         + " Don't forget to like and follow for more daily content!"
     )
 
@@ -311,7 +313,7 @@ def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
 
 
 if __name__ == "__main__":
-    subject = "Tips for a successful and wealthy life"
+    subject = "5 Tips from athletes to improve your performance"
     voice = "am_michael"
 
     logging.critical(f"Starting VIDAI for: {subject}")
