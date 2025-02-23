@@ -249,7 +249,7 @@ if __name__ == "__main__":
     voice = "am_michael"
 
     logging.critical(f"Starting VIDAI for: {subject}")
-    srt_file = "out/input.ass"
+    srt_file = "out/input.srt"
     voice_file = "out/input.wav"
     video_file = "out/input.mp4"
     filename = subject.replace(" ", "_").lower()
