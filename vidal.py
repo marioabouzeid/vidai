@@ -297,6 +297,30 @@ def add_progress_bar(input_video: str):
     os.replace(temp_output, input_video)
 
 
+def add_watermark(input_video: str, watermark: str, font_name: str) -> None:
+    logging.critical("Adding watermark to the video")
+
+    temp_output = input_video.replace(".mp4", "_temp.mp4")
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i",
+        input_video,
+        "-vf",
+        f"drawtext=text='{watermark}':font='{font_name}':x=(w-text_w)/2:y=h-th-700:fontsize=70:fontcolor=white:shadowx=2:shadowy=5:shadowcolor=black",
+        "-c:a",
+        "copy",
+        temp_output,
+        "-y",
+    ]
+
+    subprocess.run(
+        ffmpeg_cmd, check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    )
+
+    os.replace(temp_output, input_video)
+
+
 def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
     import shutil
 
@@ -313,7 +337,7 @@ def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
     logging.critical("Video copied to iCloud")
 
 
-def start_vidai(subject: str, theme: str) -> None:
+def start_vidai(subject: str, theme: str, username: str) -> None:
     logging.critical(f"Starting VIDAI for: {subject}")
     voice = "am_michael"
     srt_file = "out/input.srt"
@@ -331,6 +355,7 @@ def start_vidai(subject: str, theme: str) -> None:
     add_music_to_video(video_file, MUSIC_DIR)
     add_progress_bar(video_file)
     add_subtitles(video_file, srt_file, FONT_NAME)
+    add_watermark(video_file, username, FONT_NAME)
 
     filename = subject.replace(" ", "_").lower()
     move_to_icloud(video_file, filename, "videos")
@@ -344,6 +369,7 @@ def start_vidai(subject: str, theme: str) -> None:
 
 if __name__ == "__main__":
     theme = "sport"  # sport or wealth
-    subject = "how to increase your endurance"
+    subject = "how to increase your weights in the gym"
+    username = "@VIDAI"
 
-    start_vidai(subject, theme)
+    start_vidai(subject, theme, username)
