@@ -129,12 +129,12 @@ def cut_video_snippet(source: str, length: int, output: str):
     duration_cmd = f'ffprobe -v quiet -print_format json -show_format "{source}"'
     duration_output = subprocess.check_output(duration_cmd, shell=True)
     duration_data = json.loads(duration_output)
-    total_duration = float(duration_data["format"]["duration"]) + 3
-    max_start = total_duration - length
+    total_duration = float(duration_data["format"]["duration"])
+    max_start = total_duration - length - 3
     start_time = random.uniform(0, max_start)
 
     command = (
-        f'ffmpeg -ss {start_time:.2f} -i "{source}" -t {length} '
+        f'ffmpeg -ss {start_time:.2f} -i "{source}" -t {length + 3} '
         f'-vf "crop=ih*9/16:ih,scale=1080:1920" -c:v h264_videotoolbox '
         f'-c:a aac -b:a 128k -preset faster "{output}" -y'
     )
