@@ -74,8 +74,10 @@ def play_audio(samples: "np.ndarray", sample_rate: int) -> None:
 
 
 def save_audio(samples: "np.ndarray", sample_rate: int, filename: str) -> None:
+    import numpy as np
     from scipy.io import wavfile
 
+    samples = np.concatenate([samples, np.zeros(sample_rate * 3)])
     wavfile.write(filename, sample_rate, samples)
     logging.critical(f"Audio saved to {filename}")
 
@@ -121,22 +123,60 @@ def download_video(url: str, resolution: str) -> None:
     yt.streams[idx].download()
 
 
-def cut_video_snippet(source: str, length: int, output: str):
+def get_video_duration(input_video: str):
     import json
+
+    ffprobe_cmd_duration = [
+        "ffprobe",
+        "-i",
+        input_video,
+        "-show_entries",
+        "format=duration",
+        "-v",
+        "quiet",
+        "-of",
+        "json",
+    ]
+    result_duration = subprocess.run(
+        ffprobe_cmd_duration, capture_output=True, text=True
+    )
+    metadata_duration = json.loads(result_duration.stdout)
+    return float(metadata_duration.get("format", {}).get("duration", 0))
+
+
+def get_video_width(input_video: str):
+    import json
+
+    ffprobe_cmd_width = [
+        "ffprobe",
+        "-i",
+        input_video,
+        "-show_entries",
+        "stream=width",
+        "-select_streams",
+        "v:0",
+        "-v",
+        "quiet",
+        "-of",
+        "json",
+    ]
+    result_width = subprocess.run(ffprobe_cmd_width, capture_output=True, text=True)
+    metadata_width = json.loads(result_width.stdout)
+    return metadata_width.get("streams", [{}])[0].get("width", 0)
+
+
+def cut_and_color_video(source: str, length: int, output: str):
     import random
 
     logging.critical("Getting video from local file")
-    duration_cmd = f'ffprobe -v quiet -print_format json -show_format "{source}"'
-    duration_output = subprocess.check_output(duration_cmd, shell=True)
-    duration_data = json.loads(duration_output)
-    total_duration = float(duration_data["format"]["duration"])
+    total_duration = get_video_duration(source)
     max_start = total_duration - length - 3
     start_time = random.uniform(0, max_start)
 
     command = (
         f'ffmpeg -ss {start_time:.2f} -i "{source}" -t {length + 3} '
-        f'-vf "crop=ih*9/16:ih,scale=1080:1920" -c:v h264_videotoolbox '
-        f'-c:a aac -b:a 128k -preset faster "{output}" -y'
+        f'-vf "crop=ih*9/16:ih,scale=1080:1920,eq=contrast=1.4:brightness=0.05:saturation=1.8,unsharp=7:7:1.0:5:5:0.8" '
+        f'-c:v h264_videotoolbox -c:a aac -b:a 128k -preset faster "{output}" -y'
     )
 
     subprocess.run(
@@ -164,6 +204,7 @@ def add_voice_to_video(input_video: str, voice_file: str) -> None:
         "-map",
         "1:a",
         temp_output,
+        "-y",
     ]
 
     subprocess.run(
@@ -228,6 +269,31 @@ def add_subtitles(input_video: str, subtitle_file: str, font_name: str) -> None:
     os.replace(temp_output, input_video)
 
 
+def add_progress_bar(input_video: str):
+    logging.critical("Adding progress bar to the video")
+
+    duration = get_video_duration(input_video)
+    width = get_video_width(input_video)
+    temp_output = input_video.replace(".mp4", "_temp.mp4")
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i",
+        input_video,
+        "-filter_complex",
+        f"color=c=0xFFD700:s={width}x30[bar];[0][bar]overlay=-w+(w/{duration})*t:H-h-650:shortest=1",
+        "-c:a",
+        "copy",
+        temp_output,
+        "-y",
+    ]
+    subprocess.run(
+        ffmpeg_cmd, check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    )
+
+    os.replace(temp_output, input_video)
+
+
 def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
     import shutil
 
@@ -252,17 +318,26 @@ if __name__ == "__main__":
     srt_file = "out/input.srt"
     voice_file = "out/input.wav"
     video_file = "out/input.mp4"
-    filename = subject.replace(" ", "_").lower()
 
     text = get_text_google(subject, GEMINI_API_KEY)
     samples, sample_rate = get_audio(text, voice, ONNX, VOICES)
     save_audio(samples, sample_rate, voice_file)
     segments, info = generate_subtitles(voice_file)
     save_subtitles(segments, srt_file)
-    cut_video_snippet(ORIGIN_VIDEO, len(samples) / sample_rate, video_file)
+    cut_and_color_video(ORIGIN_VIDEO, len(samples) / sample_rate, video_file)
+    import time
+
+    time.sleep(10)
     add_voice_to_video(video_file, voice_file)
+    time.sleep(10)
     add_music_to_video(video_file, MUSIC_DIR)
+    add_progress_bar(video_file)
     add_subtitles(video_file, srt_file, FONT_NAME)
+
+    filename = subject.replace(" ", "_").lower()
     move_to_icloud(video_file, filename, "videos")
+
+    os.remove(voice_file)
+    os.remove(srt_file)
 
     logging.critical(f"Video saved to {video_file}")
