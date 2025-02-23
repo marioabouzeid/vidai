@@ -24,7 +24,7 @@ logging.basicConfig(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ONNX, VOICES = "lib/kokoro-v1.0.onnx", "lib/voices-v1.0.bin"
 FONT_NAME = "Bebas Neue"
-ORIGIN_VIDEO = "lib/video/sport.mp4"
+ORIGIN_VIDEO = "lib/video/{}.mp4"
 MUSIC_DIR = "lib/audio"
 
 
@@ -34,17 +34,18 @@ def get_text_google(subject: str, api_key: str) -> str | None:
     from google import genai
 
     client = genai.Client(api_key=api_key)
-    subject += """
-                A man will be reading your answer directly so don't write 
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=(
+            subject
+            + """
+                 A man will be reading your answer directly so don't write 
                 as if you are replying to me, just the answer directly.
                 Add a supe enganging hook at the beginning, make up something random.
                 Limit to 30 seconds of talking time at most (around 80 words).
                 Do not include the word count in your reply.
             """
-
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=subject,
+        ),
     )
 
     words = response.text.split()
@@ -312,26 +313,21 @@ def move_to_icloud(video_file: str, new_filename: str, folder: str) -> None:
     logging.critical("Video copied to iCloud")
 
 
-if __name__ == "__main__":
-    subject = "5 Tips from athletes to improve your performance"
-    voice = "am_michael"
-
+def start_vidai(subject: str, theme: str) -> None:
     logging.critical(f"Starting VIDAI for: {subject}")
+    voice = "am_michael"
     srt_file = "out/input.srt"
     voice_file = "out/input.wav"
     video_file = "out/input.mp4"
+    original_video = ORIGIN_VIDEO.format(theme)
 
     text = get_text_google(subject, GEMINI_API_KEY)
     samples, sample_rate = get_audio(text, voice, ONNX, VOICES)
     save_audio(samples, sample_rate, voice_file)
     segments, info = generate_subtitles(voice_file)
     save_subtitles(segments, srt_file)
-    cut_and_color_video(ORIGIN_VIDEO, len(samples) / sample_rate, video_file)
-    import time
-
-    time.sleep(10)
+    cut_and_color_video(original_video, len(samples) / sample_rate, video_file)
     add_voice_to_video(video_file, voice_file)
-    time.sleep(10)
     add_music_to_video(video_file, MUSIC_DIR)
     add_progress_bar(video_file)
     add_subtitles(video_file, srt_file, FONT_NAME)
@@ -339,7 +335,15 @@ if __name__ == "__main__":
     filename = subject.replace(" ", "_").lower()
     move_to_icloud(video_file, filename, "videos")
 
+    # Clean up
     os.remove(voice_file)
     os.remove(srt_file)
 
     logging.critical(f"Video saved to {video_file}")
+
+
+if __name__ == "__main__":
+    theme = "sport"  # sport or wealth
+    subject = "how to increase your endurance"
+
+    start_vidai(subject, theme)
