@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     import numpy as np
     from faster_whisper.transcribe import Segment, TranscriptionInfo
 
-# curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx -o kokoro-v1.0.onnx
-# curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin -o voices-v1.0.bin
+# curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx -o lib/kokoro-v1.0.onnx
+# curl https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin -o lib/voices-v1.0.bin
 # install poetry, project dependencies and ffmpeg
 
 load_dotenv()
@@ -89,14 +89,14 @@ def generate_subtitles(filename: str) -> "tuple[Iterable[Segment], Transcription
     return segments, info
 
 
-def save_subtitles(segments: "Iterable[Segment]", filename: str) -> None:
+def save_subtitles(segments: "Iterable[Segment]", sub_filename: str) -> None:
     def format_time(seconds: float) -> str:
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         seconds = seconds % 60
         return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}".replace(".", ",")
 
-    with open(filename, "w") as srt_file:
+    with open(sub_filename, "w") as srt_file:
         for i, segment in enumerate(segments):
             start = segment.start
             end = segment.end
@@ -105,7 +105,7 @@ def save_subtitles(segments: "Iterable[Segment]", filename: str) -> None:
             srt_file.write(f"{format_time(start)} --> {format_time(end)}\n")
             srt_file.write(f"{text.upper()}\n\n")
 
-    logging.critical(f"Subtitles saved to {filename}")
+    logging.critical(f"Subtitles saved to {sub_filename}")
 
 
 def download_video(url: str, resolution: str) -> None:
